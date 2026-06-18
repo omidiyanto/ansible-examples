@@ -1,0 +1,21 @@
+---
+- name: Patch and update Ubuntu Linux servers
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    - name: Update apt package index
+      ansible.builtin.apt:
+        update_cache: yes
+
+    - name: Upgrade all packages to the latest version
+      ansible.builtin.apt:
+        upgrade: dist
+        autoremove: yes
+        autoclean: yes
+
+    - name: Reboot the server if a reboot is required
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+      when: ansible_facts['ansible_kernel'] != ansible_facts['ansible_kernel']
