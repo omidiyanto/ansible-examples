@@ -1,0 +1,69 @@
+---
+- name: Audit OS Updates across Multiple Distributions
+  hosts: all
+  become: yes
+  tasks:
+    # ---------------------------------------------------------
+    # 1. Keluarga Debian/Ubuntu (APT)
+    # ---------------------------------------------------------
+    - name: Check for updates (APT)
+      shell: apt-get update > /dev/null && apt list --upgradable 2>/dev/null | grep -v "Listing..."
+      register: apt_updates
+      when: ansible_pkg_mgr == 'apt'
+      changed_when: false
+      ignore_errors: yes
+
+    # ---------------------------------------------------------
+    # 2. Keluarga RHEL/CentOS/Rocky/Fedora (DNF / YUM)
+    # ---------------------------------------------------------
+    - name: Check for updates (DNF/YUM)
+      # dnf check-update mengembalikan exit code 100 jika ada update
+      shell: "{{ ansible_pkg_mgr }} check-update -q"
+      register: dnf_updates
+      when: ansible_pkg_mgr in ['dnf', 'yum']
+      changed_when: false
+      failed_when: dnf_updates.rc not in [0, 100]
+
+    # ---------------------------------------------------------
+    # 3. Keluarga SUSE (Zypper)
+    # ---------------------------------------------------------
+    - name: Check for updates (Zypper)
+      shell: zypper -q list-updates
+      register: zypper_updates
+      when: ansible_pkg_mgr == 'zypper'
+      changed_when: false
+
+    # ---------------------------------------------------------
+    # 4. Keluarga Arch Linux (Pacman)
+    # ---------------------------------------------------------
+    - name: Check for updates (Pacman)
+      # pacman -Qu mengembalikan exit code 1 jika tidak ada update
+      shell: pacman -Sy > /dev/null && pacman -Qu
+      register: pacman_updates
+      when: ansible_pkg_mgr == 'pacman'
+      changed_when: false
+      failed_when: pacman_updates.rc not in [0, 1]
+
+    # ---------------------------------------------------------
+    # 5. Konsolidasi Output (Menyatukan Hasil)
+    # ---------------------------------------------------------
+    - name: Normalize update list into a single variable
+      set_fact:
+        pending_updates: >-
+          {% if ansible_pkg_mgr == 'apt' %}{{ apt_updates.stdout_lines | default([]) }}
+          {% elif ansible_pkg_mgr in ['dnf', 'yum'] %}{{ dnf_updates.stdout_lines | default([]) }}
+          {% elif ansible_pkg_mgr == 'zypper' %}{{ zypper_updates.stdout_lines | default([]) }}
+          {% elif ansible_pkg_mgr == 'pacman' %}{{ pacman_updates.stdout_lines | default([]) }}
+          {% else %}["Unsupported OS or Package Manager"]{% endif %}
+
+    # ---------------------------------------------------------
+    # 6. Tampilkan Hasil (Hanya jika ada update)
+    # ---------------------------------------------------------
+    - name: Debug output for servers needing patches
+      debug:
+        msg: 
+          - "Host: {{ inventory_hostname }} ({{ ansible_distribution }} {{ ansible_distribution_version }})"
+          - "Package Manager: {{ ansible_pkg_mgr }}"
+          - "Total Updates: {{ pending_updates | length }}"
+          - "Packages: {{ pending_updates }}"
+      when: pending_updates | length > 0
