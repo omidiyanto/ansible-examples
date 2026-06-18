@@ -1,0 +1,10 @@
+---
+- name: Hapus DNS record dari /etc/hosts
+  hosts: all
+  become: yes
+  tasks:
+    - name: Hapus baris "192.168.88.77 snitsdev01" dari /etc/hosts
+      lineinfile:
+        path: /etc/hosts
+        line: "192.168.88.77 snitsdev01"
+        state: absent

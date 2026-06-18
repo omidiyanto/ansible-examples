@@ -1,0 +1,10 @@
+---
+- name: Add DNS record to /etc/hosts
+  hosts: all
+  become: yes
+  tasks:
+    - name: Ensure DNS entry exists in /etc/hosts
+      lineinfile:
+        path: /etc/hosts
+        line: "192.168.88.77 snitsdev01"
+        state: present
